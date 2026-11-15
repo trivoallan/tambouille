@@ -3,11 +3,11 @@ adr: ADR-0016
 slug: changes
 title: Changes
 status: accepted
-revision: 2
+revision: 3
 date: 2026-11-15
 authors: [Tristan Rivoallan]
 supersedes: []
-check: npx --no-install governance-check ADR-0016
+check: npx --no-install ontrack-engineering-check ADR-0016
 traits:
   changes:
     framework: openspec
@@ -93,6 +93,18 @@ request removes the doubt about whether to open a change, not about what
 the change contains. With `framework: none` the question does not arise,
 and a request changes nothing: the pull request exists anyway.
 
+**A change is archived in the pull request that checks its last task.**
+With `framework: openspec`, `openspec archive <name>` merges the change's
+delta specs into `openspec/specs/` and moves it under
+`openspec/changes/archive/`. It runs in that pull request, not in a later
+one and not before a release, so `openspec/specs/` describes the code from
+the moment it is merged. It is one of the last tasks
+[ADR-0012](ADR-0012-delivery.md) gives every change. Some tasks can only be
+done after the merge: merging the release pull request, waiting a few
+days, telling someone. A change with such tasks stays in
+`openspec/changes/`, its tasks open, until the pull request that checks
+them, which archives it.
+
 **`spec-driven-with-adr` disagrees with ADR-0001 on three points**, and
 taken as published it would start a second decision log next to yours.
 Copy it into `openspec/schemas/spec-driven-with-adr/` (rule 3 below), then
@@ -144,23 +156,30 @@ person explicitly asks for, opens an OpenSpec change.
 
 - The intent of every behaviour change is in the repository, next to the
   code it produced, and survives the conversation that started it.
-- Archived changes keep `openspec/specs/` a current description of what
-  the application does.
-- `spec-driven` is OpenSpec's own schema: nothing to fork, nothing to carry
-  over by hand on an update.
+- Each change reads the ADRs in force before it is planned, and records
+  the durable decisions it takes, in the same log as the others.
+- ADR-0014's `Issue served` line has one place to live, whatever the
+  framework.
 
 ### Negative
 
-- No step of a change reads the ADRs in force before planning; the agent
-  and the review have to remember them.
+- The recommended schema has to be forked and adjusted, and the fork does
+  not follow upstream: a new version is merged by hand, from the pinned
+  commit.
+- Nothing compares `openspec/config.yaml` with `changes.schema`; the agent
+  notices when it reads both, review the rest of the time.
 - A change costs files before code. For small behaviour changes, that is
   slower than coding from the conversation.
+- The check cannot tell a task that waits for the merge from a task that
+  was done and left unchecked. A change merged with such a task stays
+  unarchived and passes; review catches it, and `openspec list` shows it.
 
 ### Neutral
 
-- `openspec/config.yaml` applies this trait; it does not decide it.
-- ADR-0014's `Issue served` line goes in `proposal.md`, the first artefact
-  of `spec-driven`.
+- With `framework: none`, the intent lives in the pull request, on the
+  forge, and does not survive a move to another forge.
+- governance itself uses `spec-driven`, unforked: its own ADRs are the
+  catalog it ships, written by hand, not decisions taken by its changes.
 
 ## Alternatives Considered
 
@@ -186,6 +205,20 @@ Another spec-driven framework, built around its own commands and agent
 integrations. Not offered as a value: governance would have to say where
 its first artefact is and how it meets ADR-0001, and no repository has
 asked. Adding it later changes the enum and raises `revision`.
+
+### Archive before each release
+
+The archive waits, and a check on the release pull request catches what
+was left. It blocks the release at the moment one wants to ship, on a pull
+request nobody reads line by line. A change whose tasks need the release
+can never be archived before it. And it means nothing for a repository
+with no release tool, or with `delivery.target: none`.
+
+### A `changes.archive` key
+
+`in-pr` or `manual`. `manual` would serve only a repository that archives
+in separate pull requests, and all it buys is specs behind the code. One
+rule for every repository that rules `openspec`.
 
 ### `none`
 
@@ -213,10 +246,20 @@ No framework: the intent of a change is written in its pull request. Write
 | `changes.schema` | the OpenSpec schema those changes follow | a name `openspec schema validate` accepts, or `none` with `changes.framework: none` |
 
 **Nothing checks the schema name** but the command above: the ADR check
-refuses an empty key, not a misspelt one. **`rejected` means no framework
+refuses an empty key, not a misspelt one. **For the archive rule**, the
+check reads the `tasks.md` of each directory under `openspec/changes/`,
+`archive/` excluded, and fails on any change with at least one task and
+every task checked. It runs no command for it, and names a change without
+tasks as not checked. **`rejected` means no framework
 is decided here**, and the reason says how intent is recorded instead; the
 three rules still apply to any agent that installs a schema.
 
 **Both keys are required**: an empty key is not an answer. The value is
 written in this file and nowhere else, `openspec/config.yaml` applies it;
 whoever needs it links here. See ADR-0001 for the check command.
+
+**Revisions.** What changed in the question at each revision, and what
+a repository that already ruled must re-answer.
+
+- Revision 2: a change is also opened on explicit request (in the session, or by a tracker gesture the repository declares), even when no behaviour moves. No key changed: check that your reason still fits the recommendation.
+- Revision 3: a change is archived in the pull request that checks its last task, and the check fails on a complete change left in `openspec/changes/`. No key changed: archive any complete change you left there.

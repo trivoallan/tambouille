@@ -7,7 +7,7 @@ revision: 2
 date: 2026-11-15
 authors: [Tristan Rivoallan]
 supersedes: []
-check: npx --no-install governance-check ADR-0010
+check: npx --no-install ontrack-engineering-check ADR-0010
 traits:
   architecture:
     document: arc42

@@ -90,6 +90,7 @@ architecture:
 ```yaml
 forge:
   gate: blocking
+  audit: zizmor
 ```
 
 ### Delivery (trivoallan/ADR-0012-delivery)
@@ -100,6 +101,7 @@ delivery:
   environments:
     - { name: production, trigger: merge }
   release_tool: none
+  release_notes: none
   registry: none
 deployment:
   manifests: deploy/
@@ -140,7 +142,7 @@ changes:
 
 ```yaml
 agent:
-  host: claude-code
+  hosts: [claude-code]
 ```
 
 ### Dependencies (trivoallan/ADR-0018-dependencies)
@@ -167,5 +169,13 @@ admission:
   approver: person
   install_scripts: ignored
 ```
+
+### Not yet decided
+
+- Review and merge (trivoallan/ADR-0022-review-and-merge)
+- License (trivoallan/ADR-0023-license)
+- Code scanning (trivoallan/ADR-0024-code-scanning)
+- Tools outside the package manager (trivoallan/ADR-0025-tools)
+- Agent identity (trivoallan/ADR-0026-agent-identity)
 
 <!-- ontrack:end -->
