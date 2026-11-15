@@ -1,0 +1,31 @@
+name: zizmor
+
+# Lit les workflows pour ce qu'interdit ADR-0011 (forge.audit: zizmor) :
+# référence d'action mobile, `pull_request_target`, gabarit développé dans
+# `run:`, permissions plus larges que le besoin. Un constat ne se fait taire
+# qu'en ligne, sur sa ligne, avec sa raison ; aucun `zizmor.yml`.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Sans Advanced Security : l'action échoue sur un constat, ce qui en fait
+      # un signal bloquant. Les audits en ligne tournent avec le GITHUB_TOKEN
+      # du job.
+      - uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
+        with:
+          advanced-security: false

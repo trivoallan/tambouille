@@ -6,7 +6,7 @@ name: apply
 # récupère rien de la pull request et n'ouvre la session que derrière
 # l'approbation d'une personne ayant les droits d'écriture.
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] le workflow appelé ne récupère rien de la pull request et n'agit que derrière une approbation (voir plus haut)
     types: [labeled]
 
 permissions: {}

@@ -3,10 +3,11 @@ adr: ADR-0001
 slug: record-architecture-decisions
 title: Record architecture decisions
 status: accepted
-revision: 3
+revision: 4
 date: 2026-11-14
 authors: [Tristan Rivoallan]
 supersedes: []
+check: npx --no-install ontrack-engineering-check ADR-0001
 traits:
   record-architecture-decisions:
     format: nygard
@@ -74,7 +75,7 @@ revision: 1          # written by governance: it dates the question, not the fil
 date: 2026-11-14     # the day you ruled
 authors: [Your Name] # the people who decided, no email addresses
 supersedes: []       # the ADRs this one replaces
-check: npx --no-install governance-check ADR-0006  # optional, see rule 8
+check: npx --no-install ontrack-engineering-check ADR-0006  # optional, see rule 8
 traits: {...}        # the machine-readable part of the answer
 ```
 
@@ -90,7 +91,7 @@ which says how the decision is checked, not what it is. A superseded ADR stays i
 directory, marked: the directory is a log of decisions, not a list of what
 is in force.
 
-This freeze is about **your verdict**. The ADRs governance ships, this one
+This freeze is about **your verdict**. The ADRs this package ships, this one
 included, change only through `revision` (rule 6): governance edits the
 file and raises the number, and `ontrack plan` tells you. It does not write
 a superseding ADR for its own revisions.
@@ -101,7 +102,7 @@ empty. Its Decision section states what governance recommends and why, then
 a how-to-rule block, opened by a marker sentence, that lists the steps to
 rule. The schema recognises that sentence, so this ADR does not quote it. Staying `proposed` is a state, not an oversight.
 
-A **trait** is a key governance ships and whose value is yours: the question
+A **trait** is a key this package ships and whose value is yours: the question
 and its answer sit in the same place. The prose explains and justifies; the
 trait is read without interpretation.
 
@@ -117,37 +118,30 @@ an ADR's References: that line names the Claude Code skills that help carry
 out the decision ([ADR-0017](ADR-0017-agent-tooling.md)), and it is advice,
 not part of the question. The same goes for a `check:` line (rule 8) and
 for the scripts it calls. `ontrack plan` then reports an ADR as `revised`
-only when there is something to rule on again.
+only when there is something to rule on again. Each ADR above revision 1
+ends with a **Revisions** list that says what changed and what to re-answer:
+read it before ruling again.
 
-**7. `mdschema` attests, it refuses nothing.** The `.mdschema.yml` shipped
+**7. `mdschema` refuses a half-ruled ADR.** The `.mdschema.yml` shipped
 next to these ADRs checks that a ruled ADR carries its verdict: status
 decided, date set, no trait key left empty, the sections above present, and
-the how-to-rule block gone. `ontrack plan` lists the ADRs but not this
-file, so copy it yourself, then run it, from your repository's root:
-
-```bash
-cp node_modules/trivoallan/adr/.mdschema.yml docs/adr/trivoallan/
-( cd docs/adr/trivoallan && npx @jackchuka/mdschema@0.15.1 check '*.md' )
-```
-
-Replace `trivoallan` with the alias you installed governance under.
-
-It names what is missing and stops there. If `npx` answers
-`sh: mdschema: command not found`, take the standalone binary from the
-releases of [its repository](https://github.com/jackchuka/mdschema) and run
-`mdschema check '*.md'` from the same directory.
+the how-to-rule block gone. This ADR's own `check:` line runs it:
+`ontrack check` calls `ontrack-engineering-check ADR-0001`, which runs the mdschema
+this package depends on, with that schema, on every copy of these ADRs that
+is no longer `proposed`. It fails and names the file and the key. Nothing
+is copied into your repository and nothing is installed by hand.
 
 **8. A `check:` line says when your work departs from a decision.** An ADR
 may carry, in its frontmatter, a `check:` key holding one shell command.
 Once your repository rules the ADR `accepted`, `ontrack check` runs it from
 your repository's root and reports the ADR as `pass` or `fail`. A command
-governance ships calls `npx --no-install governance-check <ADR number>`: the
+this package ships calls `npx --no-install ontrack-engineering-check <ADR number>`: the
 script reads the traits you ruled, so the same line holds whatever you
 decide, and `--no-install` keeps `npx` from fetching anything from a
 registry. Read an imported `check:` line as you would an npm install script:
-it runs governance's code in your repository.
+it runs this package's code in your repository.
 
-Those scripts follow the version of governance's package, not `revision`:
+Those scripts follow the version of this package, not `revision`:
 an `npm update` can change what a check does, and `ontrack plan` does not
 report it. A `check:` line governance adds, changes or removes in an ADR
 you have already ruled does reach your copy, as rule 4 allows: `ontrack
@@ -175,13 +169,13 @@ not depend on any network: the record lives where the decision applies.
 
 ### Negative
 
-- Three conventions, one of them tooled: `mdschema` checks a ruled ADR, but
-  nothing runs it. Not a commit, not a pull request. If nobody types the
-  command, nothing looks at your ADRs.
+- Three conventions, one of them tooled: `mdschema` checks a ruled ADR when
+  `ontrack check` runs. If nothing runs `ontrack check`, in a pull request or
+  elsewhere, nothing looks at your ADRs.
 - governance adapts surdesrails and will drift from it. Nothing detects
   when an SDR it adapts changes: the only link is the source line in each
   ADR's References, read by hand.
-- A question ADR as governance ships it fails the schema on purpose, so
+- A question ADR as this package ships it fails the schema on purpose, so
   governance's own questions are checked by review only.
 
 ### Neutral
@@ -228,3 +222,10 @@ would describe governance's context instead of its own.
 - [ontrack](https://github.com/trivoallan/ontrack): imports these ADRs and reports `new`, `revised` and `removed` ones.
 - [mdschema](https://github.com/jackchuka/mdschema): the checker behind `.mdschema.yml`.
 - [`ontrack check`](https://github.com/trivoallan/ontrack#ontrack-check-output-contract): runs the `check:` line of each decided ADR.
+
+**Revisions.** What changed in the question at each revision, and what
+a repository that already ruled must re-answer.
+
+- Revision 2: rule 4's freeze applies to a repository's verdict, and governance changes the ADRs it ships only through `revision`; a `Suggested skills` line changes no revision. No key changed: nothing to re-answer.
+- Revision 3: rule 8 describes `check:` lines, rule 4 lets a ruled ADR receive one, and rule 6 says a `check:` line and its scripts change no revision. No key changed: nothing to re-answer.
+- Revision 4: rule 7 runs the schema through this ADR's `check:` line, which refuses a half-ruled ADR, in place of a command typed by hand after copying `.mdschema.yml`. No key changed: nothing to re-answer.
