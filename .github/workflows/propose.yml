@@ -1,0 +1,25 @@
+name: propose
+
+# Un mainteneur ajoute le label `ontrack:propose` à une issue, et une pull
+# request en brouillon portant une proposition de change OpenSpec apparaît.
+# Le workflow vit dans ontrack (son ADR-0004) et est appelé ici par SHA.
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  propose:
+    # Un workflow appelé ne peut que réduire les permissions qu'on lui donne :
+    # ce job accorde ce dont les deux jobs d'ontrack ont besoin, et ontrack les
+    # restreint. Le job qui fait tourner l'agent garde `contents: read` et le
+    # jeton d'identité ; le job qui écrit ne fait tourner aucun agent.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    uses: trivoallan/ontrack/.github/workflows/propose.yml@b90d25773fd8e4cf8c9e00cc021d9ee9695dd963 # main
+    with:
+      frameworks: openspec
