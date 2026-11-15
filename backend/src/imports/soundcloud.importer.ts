@@ -3,7 +3,9 @@ import {
   BadRequestException,
   Injectable,
 } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { safeFetch } from '../common/safe-fetch';
+import { validateResponse } from './validate-response';
 import {
   type MixImport,
   type SourceImporter,
@@ -101,35 +103,31 @@ export class SoundcloudImporter implements SourceImporter {
       throw new BadGatewayException('Réponse illisible depuis SoundCloud');
     }
 
-    const candidate = parsed as Partial<Record<keyof OembedResponse, unknown>>;
-    if (typeof candidate?.title !== 'string') {
-      throw new BadGatewayException('Réponse inattendue depuis SoundCloud');
-    }
-    // Seul `title` était vérifié jusqu'ici. Un `description` non-chaîne ferait
-    // planter `htmlToText` sur `.replace` (500 au lieu du 502 attendu), et un
-    // `thumbnail_url` non-chaîne partirait tel quel en `coverSourceUrl`.
-    return {
-      title: candidate.title,
-      description:
-        typeof candidate.description === 'string'
-          ? candidate.description
-          : undefined,
-      thumbnail_url:
-        typeof candidate.thumbnail_url === 'string'
-          ? candidate.thumbnail_url
-          : undefined,
-      author_name:
-        typeof candidate.author_name === 'string'
-          ? candidate.author_name
-          : undefined,
-    };
+    return validateResponse(
+      OembedResponse,
+      parsed,
+      'Réponse inattendue depuis SoundCloud',
+    );
   }
 }
 
-interface OembedResponse {
-  title: string;
+/** Un `description` non-chaîne ferait planter `htmlToText`, et un
+ *  `thumbnail_url` non-chaîne partirait tel quel en `coverSourceUrl` : seul
+ *  `title` est obligatoire, le reste est facultatif mais typé. */
+export class OembedResponse {
+  @IsString()
+  title!: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
   thumbnail_url?: string;
+
+  @IsOptional()
+  @IsString()
   author_name?: string;
 }
 

@@ -3,9 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Transform, Type } from 'class-transformer';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { COVER_MAX_BYTES } from '../common/mime.constants';
 import { safeFetch } from '../common/safe-fetch';
 import { stripHtml } from '../common/strip-html';
+import { validateResponse } from './validate-response';
 import {
   encodeRef,
   MIX_PERDU_DANS_SA_SOURCE,
@@ -26,12 +29,66 @@ const AUDIO_FORMAT_HINTS = ['mp3', 'ogg', 'flac', 'wave', 'aiff', 'm4a', 'aac'];
  *  file beside it — the audio is streamed to the listener, not to us. */
 const FORMAT_PREFERENCE = ['mp3', 'm4a', 'aac', 'ogg', 'wave', 'aiff', 'flac'];
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+/** Archive.org rend parfois `creator` ou `description` en liste de chaînes.
+ *  Le code n'a jamais lu que la forme chaîne : la liste est écartée, comme
+ *  avant, plutôt que de refuser l'item entier. */
+const chaineSeulement = ({ value }: { value: unknown }): unknown =>
+  Array.isArray(value) ? undefined : value;
+
+class ArchiveFile {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  format?: string;
+
+  @IsOptional()
+  @IsString()
+  original?: string;
+
+  @IsOptional()
+  @IsString()
+  size?: string;
+
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  length?: string;
 }
 
-function isAudioFormat(format: unknown): boolean {
-  if (typeof format !== 'string') return false;
+class ArchiveMetadata {
+  @IsOptional()
+  @Transform(chaineSeulement)
+  @IsString()
+  creator?: string;
+
+  @IsOptional()
+  @Transform(chaineSeulement)
+  @IsString()
+  description?: string;
+}
+
+/** `GET /metadata/<id>`. Un identifiant inconnu rend `200 {}` : tout est
+ *  donc facultatif, et seul ce que le code lit est typé. */
+export class ArchivePayload {
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ArchiveFile)
+  files?: ArchiveFile[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ArchiveMetadata)
+  metadata?: ArchiveMetadata;
+}
+
+function isAudioFormat(format: string | undefined): boolean {
+  if (format === undefined) return false;
   const lower = format.toLowerCase();
   return AUDIO_FORMAT_HINTS.some((hint) => lower.includes(hint));
 }
@@ -42,8 +99,8 @@ const IMAGE_FORMAT_HINTS = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'item tile'];
 /** Archive.org's generated square tile — a fallback, never a first choice. */
 const ITEM_TILE = '__ia_thumb.jpg';
 
-function isImageFormat(format: unknown): boolean {
-  if (typeof format !== 'string') return false;
+function isImageFormat(format: string | undefined): boolean {
+  if (format === undefined) return false;
   const lower = format.toLowerCase();
   return IMAGE_FORMAT_HINTS.some((hint) => lower.includes(hint));
 }
@@ -71,15 +128,12 @@ function downloadUrl(identifier: string, fileName: string): string {
  */
 export function pickCoverUrl(
   identifier: string,
-  payload: unknown,
+  payload: ArchivePayload,
 ): string | undefined {
-  const files =
-    isRecord(payload) && Array.isArray(payload.files) ? payload.files : [];
+  const files = payload.files ?? [];
 
   const candidates = files.filter(
-    (file): file is Record<string, unknown> =>
-      isRecord(file) &&
-      typeof file.name === 'string' &&
+    (file) =>
       isImageFormat(file.format) &&
       // A derivative: a spectrogram of a track, or a thumbnail of a photo.
       file.original === undefined &&
@@ -89,24 +143,24 @@ export function pickCoverUrl(
   const uploaded = candidates.find((file) => file.name !== ITEM_TILE);
   const chosen = uploaded ?? candidates.find((file) => file.name === ITEM_TILE);
 
-  return chosen ? downloadUrl(identifier, chosen.name as string) : undefined;
+  return chosen ? downloadUrl(identifier, chosen.name) : undefined;
 }
 
-function oversized(size: unknown): boolean {
-  if (typeof size !== 'string') return false;
+function oversized(size: string | undefined): boolean {
+  if (size === undefined) return false;
   const bytes = Number(size);
   return Number.isFinite(bytes) && bytes > COVER_MAX_BYTES;
 }
 
-function formatRank(format: unknown): number {
-  const lower = typeof format === 'string' ? format.toLowerCase() : '';
+function formatRank(format: string | undefined): number {
+  const lower = format?.toLowerCase() ?? '';
   const rank = FORMAT_PREFERENCE.findIndex((hint) => lower.includes(hint));
   return rank === -1 ? FORMAT_PREFERENCE.length : rank;
 }
 
 /** Archive.org gives `length` either as seconds ("125.4") or as "mm:ss" / "h:mm:ss". */
-export function parseLength(raw: unknown): number | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+export function parseLength(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
   const parts = raw.trim().split(':').map(Number);
   if (parts.some((part) => !Number.isFinite(part))) return undefined;
   const seconds = parts.reduce((acc, part) => acc * 60 + part, 0);
@@ -133,26 +187,18 @@ export function extractIdentifier(url: URL): string | null {
  */
 export function parseArchiveItem(
   identifier: string,
-  payload: unknown,
+  payload: ArchivePayload,
 ): SourceItem[] {
-  const files =
-    isRecord(payload) && Array.isArray(payload.files) ? payload.files : [];
-
-  const audioFiles = files.filter(
-    (file): file is Record<string, unknown> =>
-      isRecord(file) &&
-      typeof file.name === 'string' &&
-      isAudioFormat(file.format),
+  const audioFiles = (payload.files ?? []).filter((file) =>
+    isAudioFormat(file.format),
   );
-  const audioNames = new Set(audioFiles.map((file) => file.name as string));
+  const audioNames = new Set(audioFiles.map((file) => file.name));
 
-  const groups = new Map<string, Record<string, unknown>>();
+  const groups = new Map<string, ArchiveFile>();
   for (const file of audioFiles) {
     const original = file.original;
     const key =
-      typeof original === 'string' && audioNames.has(original)
-        ? original
-        : (file.name as string);
+      original !== undefined && audioNames.has(original) ? original : file.name;
 
     const kept = groups.get(key);
     if (!kept || formatRank(file.format) < formatRank(kept.format)) {
@@ -165,21 +211,13 @@ export function parseArchiveItem(
   const coverUrl = pickCoverUrl(identifier, payload);
   // Same reasoning for the taper/band name: it names the item, not one track,
   // so every entry carries the same value.
-  const metadata =
-    isRecord(payload) && isRecord(payload.metadata) ? payload.metadata : {};
-  const collectionLabel =
-    typeof metadata.creator === 'string' && metadata.creator.trim()
-      ? metadata.creator.trim()
-      : undefined;
+  const collectionLabel = payload.metadata?.creator?.trim() || undefined;
 
   return [...groups.values()].map((file) => {
     const title = file.title;
     return {
-      ref: encodeRef('archive', `${identifier}/${file.name as string}`),
-      title:
-        typeof title === 'string' && title.trim()
-          ? title.trim()
-          : (file.name as string),
+      ref: encodeRef('archive', `${identifier}/${file.name}`),
+      title: title?.trim() || file.name,
       durationSec: parseLength(file.length),
       coverUrl,
       pageUrl: `https://archive.org/details/${identifier}`,
@@ -221,7 +259,7 @@ export class ArchiveImporter implements SourceImporter {
     }
     // A single audio file is not a choice; skip the list and import it.
     return items.length === 1
-      ? this.importItem(items[0]!.ref.replace(/^archive:/, ''))
+      ? this.importItem(items[0].ref.replace(/^archive:/, ''))
       : items;
   }
 
@@ -265,8 +303,7 @@ export class ArchiveImporter implements SourceImporter {
     const fileName = value.slice(slash + 1);
 
     const payload = await this.readMetadata(identifier);
-    const metadata =
-      isRecord(payload) && isRecord(payload.metadata) ? payload.metadata : {};
+    const metadata = payload.metadata ?? {};
     const item = parseArchiveItem(identifier, payload).find(
       (candidate) => candidate.ref === encodeRef('archive', value),
     );
@@ -276,14 +313,13 @@ export class ArchiveImporter implements SourceImporter {
       );
     }
 
-    const creator =
-      typeof metadata.creator === 'string' ? metadata.creator : undefined;
+    const creator = metadata.creator;
 
     return {
       title: item.title,
       // Archive.org writes its description as a run of `<div>` lines.
       description:
-        typeof metadata.description === 'string'
+        metadata.description !== undefined
           ? stripHtml(metadata.description)
           : '',
       // Le nom du créateur rejoint les tags : le mix appartiendra au compte
@@ -301,7 +337,7 @@ export class ArchiveImporter implements SourceImporter {
     };
   }
 
-  private async readMetadata(identifier: string): Promise<unknown> {
+  private async readMetadata(identifier: string): Promise<ArchivePayload> {
     const { body } = await safeFetch(
       `https://archive.org/metadata/${encodeURIComponent(identifier)}`,
       {
@@ -310,10 +346,16 @@ export class ArchiveImporter implements SourceImporter {
         accept: 'application/json',
       },
     );
+    let parsed: unknown;
     try {
-      return JSON.parse(body.toString('utf8'));
+      parsed = JSON.parse(body.toString('utf8'));
     } catch {
       throw new BadGatewayException('Réponse illisible depuis Archive.org');
     }
+    return validateResponse(
+      ArchivePayload,
+      parsed,
+      'Réponse inattendue depuis Archive.org',
+    );
   }
 }

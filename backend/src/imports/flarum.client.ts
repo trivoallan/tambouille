@@ -1,5 +1,18 @@
 import { BadGatewayException, Injectable } from '@nestjs/common';
+import { plainToInstance, Transform, Type } from 'class-transformer';
+import {
+  IsArray,
+  IsObject,
+  IsOptional,
+  IsString,
+  Validate,
+  validateSync,
+  ValidateNested,
+  ValidatorConstraint,
+  type ValidatorConstraintInterface,
+} from 'class-validator';
 import { safeFetch } from '../common/safe-fetch';
+import { validateResponse } from './validate-response';
 
 export const FORUM_ORIGIN = 'https://www.musiques-incongrues.net';
 
@@ -47,11 +60,58 @@ function versQueryString(params: Record<string, string>): string {
     .join('&');
 }
 
-interface JsonApiRessource {
-  type: string;
-  id: string;
+/** Une ressource JSON:API. Seuls `type` et `id` sont exigés : les attributs et
+ *  relations varient d'une ressource à l'autre et sont lus avec tolérance. */
+export class JsonApiRessource {
+  @IsString()
+  type!: string;
+
+  @IsString()
+  id!: string;
+
+  @IsOptional()
+  @IsObject()
   attributes?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
   relationships?: Record<string, { data?: { id: string } | { id: string }[] }>;
+}
+
+@ValidatorConstraint({ name: 'ressourceOuListe', async: false })
+class RessourceOuListe implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    const items = Array.isArray(value) ? value : [value];
+    return items.every(
+      (item) =>
+        item instanceof JsonApiRessource && validateSync(item).length === 0,
+    );
+  }
+
+  defaultMessage(): string {
+    return 'data doit être une ressource JSON:API ou une liste de ressources';
+  }
+}
+
+/** Un document JSON:API du forum : `data` est une ressource (lecture par
+ *  identifiant) ou une liste, `included` les ressources rattachées. */
+export class JsonApiDocument {
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value)
+      ? plainToInstance(JsonApiRessource, value)
+      : value && typeof value === 'object'
+        ? plainToInstance(JsonApiRessource, value)
+        : value,
+  )
+  @Validate(RessourceOuListe)
+  data?: JsonApiRessource | JsonApiRessource[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => JsonApiRessource)
+  included?: JsonApiRessource[];
 }
 
 /**
@@ -105,18 +165,24 @@ export class FlarumClient {
       accept: 'application/json',
     });
 
-    let document: { data?: JsonApiRessource[]; included?: JsonApiRessource[] };
+    let parsed: unknown;
     try {
-      document = JSON.parse(body.toString('utf8')) as typeof document;
+      parsed = JSON.parse(body.toString('utf8'));
     } catch {
       throw new BadGatewayException('Réponse illisible du forum');
     }
+    const document = validateResponse(
+      JsonApiDocument,
+      parsed,
+      'Réponse inattendue du forum',
+    );
+    const messages = Array.isArray(document.data) ? document.data : [];
 
     const inclus = new Map(
       (document.included ?? []).map((r) => [`${r.type}:${r.id}`, r]),
     );
 
-    return (document.data ?? []).map((brute) => {
+    return messages.map((brute) => {
       const auteurId = (
         brute.relationships?.user?.data as { id: string } | undefined
       )?.id;
@@ -228,24 +294,24 @@ export class FlarumClient {
   /** Une réponse JSON:API du forum, lue et analysée. Factorisée parce que
    *  quatre points d'entrée en ont besoin, et qu'une copie de plus serait une
    *  copie de plus où la gestion d'erreur peut diverger. */
-  private async lireJson(endpoint: string): Promise<{
-    data?: unknown;
-    included?: JsonApiRessource[];
-  }> {
+  private async lireJson(endpoint: string): Promise<JsonApiDocument> {
     const { body } = await safeFetch(endpoint, {
       maxBytes: API_MAX_BYTES,
       timeoutMs: FETCH_TIMEOUT_MS,
       accept: 'application/json',
     });
 
+    let parsed: unknown;
     try {
-      return JSON.parse(body.toString('utf8')) as {
-        data?: unknown;
-        included?: JsonApiRessource[];
-      };
+      parsed = JSON.parse(body.toString('utf8'));
     } catch {
       throw new BadGatewayException('Réponse illisible du forum');
     }
+    return validateResponse(
+      JsonApiDocument,
+      parsed,
+      'Réponse inattendue du forum',
+    );
   }
 
   private async lire(endpoint: string): Promise<FlarumDiscussion[]> {
@@ -255,9 +321,9 @@ export class FlarumClient {
     // Les deux passent par ici pour que le rattachement du premier message ne
     // soit écrit qu'une fois.
     const brutes = Array.isArray(document.data)
-      ? (document.data as JsonApiRessource[])
+      ? document.data
       : document.data
-        ? [document.data as JsonApiRessource]
+        ? [document.data]
         : [];
 
     const inclus = new Map(

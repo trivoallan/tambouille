@@ -54,7 +54,6 @@ describe('parseLength', () => {
     ['', undefined],
     ['   ', undefined],
     [undefined, undefined],
-    [42, undefined],
     ['not a duration', undefined],
     ['0', undefined],
   ])('reads %p as %p', (raw, expected) => {
@@ -299,7 +298,6 @@ describe('parseArchiveItem', () => {
 
   it('returns an empty list for the empty object Archive.org sends for an unknown item', () => {
     expect(parseArchiveItem('my-item', {})).toEqual([]);
-    expect(parseArchiveItem('my-item', null)).toEqual([]);
   });
 
   it('donne à chaque item l’adresse de la page Archive.org de l’item', () => {

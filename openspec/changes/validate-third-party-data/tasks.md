@@ -1,6 +1,6 @@
 ## 1. Importeurs (backend)
 
-- [ ] 1.1 Dresser la liste des lectures de réponses tierces dans `backend/src/imports` (SoundCloud, Archive, Lyl, Flarum, podcasts)
+- [x] 1.1 Dresser la liste des lectures de réponses tierces dans `backend/src/imports` (SoundCloud, Archive, Lyl, Flarum, podcasts)
 - [ ] 1.2 Déclarer une classe de réponse `class-validator` par source, à côté de son importeur
 - [ ] 1.3 Remplacer les tests `typeof` manuels de chaque importeur par la validation de cette classe
 - [ ] 1.4 Tests : réponse conforme (fixtures existantes), champ obligatoire absent, champ mal typé, champ facultatif absent

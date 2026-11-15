@@ -4,8 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { safeFetch } from '../common/safe-fetch';
 import { stripHtml } from '../common/strip-html';
+import { validateResponse } from './validate-response';
 import {
   encodeRef,
   type MixImport,
@@ -39,17 +42,67 @@ const SLUG_PATTERN = /^[A-Za-z0-9._-]+$/;
  * the Mixcloud and SoundCloud mirrors, which are deliberately ignored. The mp3
  * is the original and plays without a third-party widget.
  */
-export interface LylEpisode {
-  title: string;
-  slug: string;
+class LylNamedUrl {
+  @IsOptional()
+  @IsString()
+  url?: string;
+}
+
+class LylStyle {
+  @IsOptional()
+  @IsString()
+  name?: string;
+}
+
+export class LylEpisode {
+  @IsString()
+  title!: string;
+
+  @IsString()
+  slug!: string;
+
+  @IsOptional()
+  @IsString()
   artists?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
   startAt?: string;
+
+  @IsOptional()
+  @IsString()
   duration?: string;
+
+  @IsOptional()
+  @IsString()
   tracks?: string;
-  audio?: { url?: string } | null;
-  image?: { url?: string } | null;
-  styles?: { name?: string }[] | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LylNamedUrl)
+  audio?: LylNamedUrl | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LylNamedUrl)
+  image?: LylNamedUrl | null;
+
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => LylStyle)
+  styles?: LylStyle[] | null;
+}
+
+/** La réponse de `/api/episodes` : `data` est la liste des épisodes. */
+class LylEpisodesResponse {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LylEpisode)
+  data!: LylEpisode[];
 }
 
 export function parseLylUrl(
@@ -244,11 +297,11 @@ export class LylImporter implements SourceImporter {
       throw new BadGatewayException('Réponse illisible depuis LYL Radio');
     }
 
-    const data = (parsed as { data?: unknown })?.data;
-    if (!Array.isArray(data)) {
-      throw new BadGatewayException('Réponse inattendue depuis LYL Radio');
-    }
-    return data as LylEpisode[];
+    return validateResponse(
+      LylEpisodesResponse,
+      parsed,
+      'Réponse inattendue depuis LYL Radio',
+    ).data;
   }
 }
 
