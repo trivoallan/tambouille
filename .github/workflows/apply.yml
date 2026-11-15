@@ -1,0 +1,23 @@
+name: apply
+
+# Un mainteneur ajoute le label `ontrack:apply` à une pull request approuvée
+# sur son dernier commit, et une session Claude Code s'ouvre pour appliquer
+# le change avec lui. Le workflow vit dans ontrack (son ADR-0004) : il ne
+# récupère rien de la pull request et n'ouvre la session que derrière
+# l'approbation d'une personne ayant les droits d'écriture.
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  apply:
+    permissions:
+      pull-requests: write
+    uses: trivoallan/ontrack/.github/workflows/apply.yml@b90d25773fd8e4cf8c9e00cc021d9ee9695dd963 # main
+    with:
+      routine_id: ${{ vars.APPLY_ROUTINE_ID }}
+    secrets:
+      # Nommé explicitement : jamais `secrets: inherit`.
+      fire_token: ${{ secrets.APPLY_FIRE_TOKEN }}
